@@ -175,7 +175,19 @@ class IngImporter(importer.ImporterProtocol):
                 logging.info('New Payee: %s written in rules',payee)
                 ruleswriter.writerow([payee, trans_act, trans_desc_short])
                 
-        # sort rules file at the end so duplicate can found
+        # sort rules file at the end so duplicate can found      
+        with open(self.rules_path, 'r', newline='') as csvfile:
+            reader = csv.DictReader(csvfile, delimiter=";")
+            sortedRules = sorted(reader, key=lambda row:(row['column_1'],row['column_2')], reverse=False)
+
+        with open(self.rules_path, 'w', newline='') as csvfile:
+            fieldnames = ['column_1', 'column_2', column_3]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in sortedRules
+               writer.writerow(row)
+                
+        
         
         return entries 
 
