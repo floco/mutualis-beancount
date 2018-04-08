@@ -39,8 +39,9 @@ class IngImporter(importer.ImporterProtocol):
     # @PredictPostings(training_data=os.environ["TRAINING_DATA"])
     # @PredictPayees(training_data=os.environ["TRAINING_DATA"])
 
-    def __init__(self, account, rules_path):
-        self.account = account
+    def __init__(self, bank, rules_path):
+    		self.bank = bank
+        self.account = ""
         self.rules_path = rules_path
         self.rules = []
         self.new_payees = {}
@@ -49,12 +50,12 @@ class IngImporter(importer.ImporterProtocol):
         return('IngImporter')
 
     def identify(self, f):
-        bank = os.path.basename(os.path.dirname(f.name))
+        dirname = os.path.basename(os.path.dirname(f.name))
         account = os.path.basename(f.name)
-        if not re.match('INGB', bank):
-            logging.info('Ignored: %s %s',bank,account)
+        if not re.match(self.bank, dirname):
+            logging.info('Ignored: %s %s',dirname,account)
             return False
-        self.account = "Assets:"+bank+":"+account
+        self.account = "Assets:" + self.bank + ":" + account
         logging.info('Processing: %s %s',bank,account)
         return True
 
