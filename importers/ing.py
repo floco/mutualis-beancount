@@ -174,7 +174,8 @@ class IngImporter(importer.ImporterProtocol):
                     trans_act="Expenses:XXXXXXXXX"    
                 logging.info('New Payee: %s written in rules',payee)
                 ruleswriter.writerow([payee, trans_act, trans_desc_short])
-
+                
+        # sort rules file at the end so duplicate can found
         
         return entries 
 
