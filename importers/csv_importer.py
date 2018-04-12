@@ -36,12 +36,13 @@ if coloredlogs:
 
 class CsvImporter(importer.ImporterProtocol):
 
-    def __init__(self, bank, rules_path, chars_to_replace, column_titles, skip):
+    def __init__(self, bank, rules_path, chars_to_replace, column_titles, skip, delimiter=';'):
         self.bank = bank
         self.rules_path = rules_path
         self.chars_to_replace = chars_to_replace
         self.column_titles = column_titles
         self.skip = skip
+        self.delimiter = delimiter
         self.rules = []
         self.new_payees = {}
 
@@ -72,6 +73,7 @@ class CsvImporter(importer.ImporterProtocol):
         if payee not in self.new_payees:
             self.new_payees.update({payee:info})
 
+    # TODO: make this generic
     def find_payee(self, trans_desc):
         section = " ".join(trans_desc[80:160].split())
         if section.count(',') > 1:
@@ -93,7 +95,7 @@ class CsvImporter(importer.ImporterProtocol):
 
         with open(f.name) as f:
 
-            for index, row in enumerate(csv.DictReader(f, delimiter=';')):
+            for index, row in enumerate(csv.DictReader(f, delimiter=self.delimiter)):
                 
                 # get the date
                 trans_date = parse(row[self.column_titles[0]]).date()
@@ -172,6 +174,7 @@ class CsvImporter(importer.ImporterProtocol):
 
                 entries.append(txn)
 
+        # Add unknown payees in the rules file
         with open(self.rules_path, 'a', newline='') as csvfile:
             ruleswriter = csv.writer(csvfile, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             for payee,info in self.new_payees.items():
@@ -183,7 +186,9 @@ class CsvImporter(importer.ImporterProtocol):
                 logging.info('New Payee: %s written in rules',payee)
                 ruleswriter.writerow([payee, trans_act, trans_desc_short])
                 
-        # sort rules file at the end so duplicate can found      
+        # sort rules file at the end so duplicate can found   
+        # TODO: treat duplicates here (options: keep first word if long enough or two if not, keep always 8 chars ) 
+        # TODO: change lambda by keyitems  
         with open(self.rules_path, 'r', newline='') as csvfile:
             reader = csv.DictReader(csvfile, delimiter=";")
             sortedRules = sorted(reader, key=lambda row:(row['column_1'],row['column_2')], reverse=False)
