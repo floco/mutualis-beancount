@@ -22,8 +22,6 @@ import re
 
 import logging
 LOG_LEVEL = logging.DEBUG
-#logging.basicConfig(filename='import.log',filemode='w',format='%(message)s', level=LOG_LEVEL)
-
 
 logging.basicConfig(
     level=LOG_LEVEL,
