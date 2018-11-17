@@ -40,7 +40,7 @@ class IngImporter(importer.ImporterProtocol):
     # @PredictPayees(training_data=os.environ["TRAINING_DATA"])
 
     def __init__(self, bank, rules_path):
-    		self.bank = bank
+    	self.bank = bank
         self.account = ""
         self.rules_path = rules_path
         self.rules = []
@@ -179,7 +179,7 @@ class IngImporter(importer.ImporterProtocol):
         # sort rules file at the end so duplicate can found      
         with open(self.rules_path, 'r', newline='') as csvfile:
             reader = csv.DictReader(csvfile, delimiter=";")
-            sortedRules = sorted(reader, key=lambda row:(row['column_1'],row['column_2')], reverse=False)
+            sortedRules = sorted(reader, key=lambda row:(row['column_1'],row['column_2'], reverse=False)
 
         with open(self.rules_path, 'w', newline='') as csvfile:
             fieldnames = ['column_1', 'column_2', column_3]

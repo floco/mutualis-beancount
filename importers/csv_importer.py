@@ -22,7 +22,16 @@ import re
 
 import logging
 LOG_LEVEL = logging.DEBUG
-logging.basicConfig(format='%(message)s', level=LOG_LEVEL)
+#logging.basicConfig(filename='import.log',filemode='w',format='%(message)s', level=LOG_LEVEL)
+
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s",
+    handlers=[
+        logging.FileHandler("import.log","w"),
+        logging.StreamHandler()
+    ])
 logger = logging.getLogger(__name__)
 
 # colorize the log output if the coloredlogs package is available
@@ -39,37 +48,48 @@ class CsvImporter(importer.ImporterProtocol):
     def __init__(self, bank, rules_path, chars_to_replace, column_titles, skip, delimiter=';'):
         self.bank = bank
         self.rules_path = rules_path
+        self.rules_path_new = rules_path + "_new"
         self.chars_to_replace = chars_to_replace
         self.column_titles = column_titles
         self.skip = skip
         self.delimiter = delimiter
         self.rules = []
         self.new_payees = {}
+        open(self.rules_path_new, 'w').close()
 
     def name(self):
         return('CsvImporter')
 
     def identify(self, f):
         dirname = os.path.basename(os.path.dirname(f.name))
-        account = os.path.basename(f.name)
-        if not re.match(self.bank, dirname):
-            logging.info('Ignored: %s %s', dirname, account)
+        filename = os.path.basename(f.name)
+        if not re.match("(?i)"+self.bank, dirname):
+            logging.info('Ignored: %s %s', dirname, filename)
             return False
+        account = filename.split(" ")[0]
         self.account = "Assets:" + self.bank + ":" + account
-        logging.info('Processing: %s %s', bank, account)
+        logging.info('Processing: %s %s', self.bank, account)
         return True
 
     def _import_rules(self):
         with open(os.path.expanduser(self.rules_path), 'r') as f:
-            for index, row in enumerate(csv.DictReader(f,delimiter=';', fieldnames=['payee', 'account', 'desc', 'amount', 'currency'])):
+            for index, row in enumerate(csv.DictReader(filter(lambda row: row[0]!='#',f),delimiter=';', fieldnames=['payee', 'account', 'desc', 'amount', 'currency'])):
                 self.rules.append(row)
+        logging.info('Imported %s rules',len(self.rules))
 
     def _guess_account_from_payee(self, payee, info):
         for rule in self.rules:
-            # logging.info('Rule: %s Regex: %s',rule, ".*"+rule['payee']+".*")
-            if re.match(".*"+payee+".*", rule['payee']):
+            # try first to find pattern in guessed payee
+            if rule['payee'] and payee and re.match(".*(?i)"+rule['payee']+".*", payee):
+                logging.info('Pattern %s found in payee: %s', rule['payee'], payee)
+                return rule
+            # then try to find pattern in short description
+            if rule['payee'] and info and re.match(".*(?i)"+rule['payee']+".*", info[0]):
+                logging.info('Pattern %s found in info: %s', rule['payee'], info[0])
                 return rule
         # if we parsed all rules and not found any match, then we add the payee in the new payee dict
+        if payee.count(' ') > 0:
+            payee = payee.split(" ")[0]
         if payee not in self.new_payees:
             self.new_payees.update({payee:info})
 
@@ -86,14 +106,20 @@ class CsvImporter(importer.ImporterProtocol):
             return section
 
     def extract(self, f):
-        self._import_rules()
+        
+        logging.info('BEGIN Processing: %s %s', self.bank, os.path.basename(f.name))
+        
+        self.rules = []
+        self.new_payees = {}
         entries = []
         accounts = {}
+        self._import_rules()
+
 
         # opn = data.Optional(meta=meta,date=parse("01/01/2000").date(),account=trans_acc,currencies=[trans_cur],booking=None)
         # entries.append(opn)
 
-        with open(f.name) as f:
+        with open(f.name, "r", encoding='utf-8', errors='ignore') as f:
 
             for index, row in enumerate(csv.DictReader(f, delimiter=self.delimiter)):
                 
@@ -101,7 +127,7 @@ class CsvImporter(importer.ImporterProtocol):
                 trans_date = parse(row[self.column_titles[0]]).date()
                 
                 # get the amount & currency (skip if 0)
-                trans_amt  = row[self.column_titles[1]].replace(",",".")
+                trans_amt  = row[self.column_titles[1]].replace(".","").replace(",",".")
                 if trans_amt==0: continue
                 trans_cur  = row[self.column_titles[2]]
                 
@@ -109,13 +135,13 @@ class CsvImporter(importer.ImporterProtocol):
                 trans_desc = row[self.column_titles[3]]
                 # ignore transactions to skip
                 for skip in self.skip:
-                    if re.match(skip, trans_desc): continue
+                    if re.match("(?i)"+skip, trans_desc): continue
                 # replace all characters required
                 for oldchar, newchar in self.chars_to_replace.items():
                     trans_desc = trans_desc.replace(oldchar, newchar)
                 
-                # sometimes the meaningful part are in annex
-                if re.match('.*avis en annexe.*', trans_desc):
+                # sometimes the meaningful part is in annex
+                if re.match('.*(?i)avis en annexe.*', trans_desc):
                     trans_desc = row[self.column_titles[4]].replace("é","à").replace("�","é").replace("*"," ").replace("+"," ")
                     trans_pay = " ".join(trans_desc[0:25].split()).replace("(","").replace(")","")
                 else:
@@ -124,13 +150,16 @@ class CsvImporter(importer.ImporterProtocol):
                 # reformat the description
                 trans_desc_short = " ".join(trans_desc.split()).replace("\"","").replace(",",".")
 
+                # try to guess the account
                 extracted_account = self._guess_account_from_payee(trans_pay, (trans_desc_short, trans_amt, trans_cur))
                 if extracted_account: 
                     trans_acc = extracted_account['account']
-                    #logging.info('ACCOUNT %s MATCHED WITH %s (%s)',extracted_account,trans_pay,trans_desc_short)
+                    trans_pay = extracted_account['payee']
+                    #logging.info('ACCOUNT %s MATCHED WITH %s (%s)',trans_acc,trans_pay,trans_desc_short)
                 else:
-                    logging.info('No match for %s (%s)',trans_pay,trans_desc_short)
-                    trans_acc = "Expenses:Unmatched"    
+                    #logging.info('No match for %s (%s)',trans_pay,trans_desc_short)
+                    trans_acc = "Expenses:Unmatched" 
+                    continue   
 
 
 
@@ -143,7 +172,7 @@ class CsvImporter(importer.ImporterProtocol):
                 if trans_acc not in accounts:
                     accounts.update({trans_acc:1})
                     opn = data.Open(meta=meta,date=parse("01/01/2000").date(),account=trans_acc,currencies=[trans_cur],booking=None)
-                    entries.append(opn)
+                    # entries.append(opn)
 
                 txn = data.Transaction(
                     meta=meta,
@@ -175,33 +204,39 @@ class CsvImporter(importer.ImporterProtocol):
                 entries.append(txn)
 
         # Add unknown payees in the rules file
-        with open(self.rules_path, 'a', newline='') as csvfile:
-            ruleswriter = csv.writer(csvfile, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            for payee,info in self.new_payees.items():
-                trans_desc_short, trans_amt, trans_cur = info
-                if D(trans_amt) > 0:
-                    trans_act="Income:XXXXXXXXX"
-                else:
-                    trans_act="Expenses:XXXXXXXXX"    
-                logging.info('New Payee: %s written in rules',payee)
-                ruleswriter.writerow([payee, trans_act, trans_desc_short])
-                
-        # sort rules file at the end so duplicate can found   
-        # TODO: treat duplicates here (options: keep first word if long enough or two if not, keep always 8 chars ) 
-        # TODO: change lambda by keyitems  
-        with open(self.rules_path, 'r', newline='') as csvfile:
-            reader = csv.DictReader(csvfile, delimiter=";")
-            sortedRules = sorted(reader, key=lambda row:(row['column_1'],row['column_2')], reverse=False)
+        if len(self.new_payees) > 0:
+            logging.info('Saving %s new rules...',len(self.new_payees))
+            with open(self.rules_path_new, 'a', newline='') as csvfile:
+                ruleswriter = csv.writer(csvfile, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                for payee,info in self.new_payees.items():
+                    trans_desc_short, trans_amt, trans_cur = info
+                    if D(trans_amt) > 0:
+                        trans_act="Income:XXXXXXXXX"
+                    else:
+                        trans_act="Expenses:XXXXXXXXX"    
+                    #logging.info('New Payee: %s written in rules',payee)
+                    ruleswriter.writerow([payee, trans_act, trans_desc_short])
+                csvfile.close()
+            
+                    
+            # sort rules file at the end so duplicate can be found   
+            # TODO: treat duplicates here (options: keep first word if long enough or two if not, keep always 8 chars ) 
+            # TODO: change lambda by keyitems  
+            logging.info('Sorting rules file ...')
+            with open(self.rules_path_new, 'r', newline='') as csvfile:
+                reader = csv.DictReader(csvfile, delimiter=";", fieldnames=['payee', 'account', 'desc'])
+                sortedRules = sorted(reader, key=lambda row:(row['payee'],row['account']), reverse=False)
 
-        with open(self.rules_path, 'w', newline='') as csvfile:
-            fieldnames = ['column_1', 'column_2', column_3]
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-            for row in sortedRules
-               writer.writerow(row)
-                
-        
-        
+            with open(self.rules_path_new, 'w', newline='') as csvfile:
+                #fieldnames = ['column_1', 'column_2', 'column_3']
+                #writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                #writer.writeheader()
+                writer = csv.DictWriter(csvfile, delimiter=";", fieldnames=['payee', 'account', 'desc'])
+                for index, row in enumerate(sortedRules):
+                    writer.writerow(row)
+
+        logging.info('END')
+
         return entries 
 
         
