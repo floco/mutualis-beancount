@@ -1,4 +1,4 @@
-""" 
+"""
 Importer for CSV files
 Tested only with my banks: INGB, KEYT
 """
