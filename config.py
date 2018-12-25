@@ -15,6 +15,6 @@ from importers import csv_importer
 
 # csv_importer = PredictPostings(suggest_accounts=False)(CsvImporter)
 CONFIG = [
-    csv_importer.CsvImporter(bank='INGB',rules_path=os.environ["RULES"],chars_to_replace={"é":"à", "�":"é", "*":" ", "+":" "}, column_titles=['Date comptable', 'Montant', 'Devise', 'Libell�s', 'D�tails du mouvement'], skip=['Souscription.*']),
-    csv_importer.CsvImporter(bank='KEYT',rules_path=os.environ["RULES"],chars_to_replace={"�":"", "*":" ", "+":" "}, column_titles=['Date', 'Montant', 'Devise', 'Description', 'Compte'], skip=['Souscription.*']),
+    csv_importer.CsvImporter(bank='INGB',rules_path=os.environ["RULES"],chars_to_replace={"é":"à", "�":"é", "*":" ", "+":" "}, column_titles=['Date comptable', 'Montant', 'Devise', 'Libell�s', 'D�tails du mouvement'], skip=['Souscription.*'], date_format='%d/%m/%Y'),
+    csv_importer.CsvImporter(bank='KEYT',rules_path=os.environ["RULES"],chars_to_replace={"�":"", "*":" ", "+":" "}, column_titles=['Date', 'Montant', 'Devise', 'Description', 'Compte'], skip=['Souscription.*'], date_format='%d.%m.%Y'),
 ]

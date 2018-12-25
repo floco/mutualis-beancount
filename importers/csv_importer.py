@@ -11,7 +11,8 @@ from beancount.core import flags
 from beancount.core import data
 from beancount.core.position import Cost
 
-from dateutil.parser import parse
+#from dateutil.parser import parse
+from datetime import datetime
 
 # from titlecase import titlecase
 
@@ -43,7 +44,7 @@ if coloredlogs:
 
 class CsvImporter(importer.ImporterProtocol):
 
-    def __init__(self, bank, rules_path, chars_to_replace, column_titles, skip, delimiter=';'):
+    def __init__(self, bank, rules_path, chars_to_replace, column_titles, skip, date_format, delimiter=';'):
         self.bank = bank
         self.rules_path = rules_path
         self.rules_path_new = rules_path + "_new"
@@ -51,6 +52,7 @@ class CsvImporter(importer.ImporterProtocol):
         self.column_titles = column_titles
         self.skip = skip
         self.delimiter = delimiter
+        self.date_format = date_format
         self.rules = []
         self.new_payees = {}
         open(self.rules_path_new, 'w').close()
@@ -79,16 +81,17 @@ class CsvImporter(importer.ImporterProtocol):
         for rule in self.rules:
             # try first to find pattern in guessed payee
             if rule['payee'] and payee and re.match(".*(?i)"+rule['payee']+".*", payee):
-                logging.info('Pattern %s found in payee: %s', rule['payee'], payee)
+                logging.info('%s | %s %s | Pattern %s found in payee:  %s', info[3], info[1], info[2], rule['payee'], payee)
                 return rule
             # then try to find pattern in short description
             if rule['payee'] and info and re.match(".*(?i)"+rule['payee']+".*", info[0]):
-                logging.info('Pattern %s found in info: %s', rule['payee'], info[0])
+                logging.info('%s | %s %s | Pattern %s found in info: %s', info[3], info[1], info[2], rule['payee'], info[0])
                 return rule
         # if we parsed all rules and not found any match, then we add the payee in the new payee dict
         if payee.count(' ') > 0:
             payee = payee.split(" ")[0]
         if payee not in self.new_payees:
+            logging.warning('%s | %s %s | Pattern %s NOT FOUND', info[3], info[1], info[2], rule['payee'])
             self.new_payees.update({payee:info})
 
     # TODO: make this generic
@@ -122,7 +125,7 @@ class CsvImporter(importer.ImporterProtocol):
             for index, row in enumerate(csv.DictReader(f, delimiter=self.delimiter)):
                 
                 # get the date
-                trans_date = parse(row[self.column_titles[0]]).date()
+                trans_date = datetime.strptime(row[self.column_titles[0]], self.date_format).date()
                 
                 # get the amount & currency (skip if 0)
                 trans_amt  = row[self.column_titles[1]].replace(".","").replace(",",".")
@@ -130,7 +133,7 @@ class CsvImporter(importer.ImporterProtocol):
                 trans_cur  = row[self.column_titles[2]]
                 
                 # get the description
-                trans_desc = row[self.column_titles[3]]
+                trans_desc = row[self.column_titles[3]] + row[self.column_titles[4]]
                 # ignore transactions to skip
                 for skip in self.skip:
                     if re.match("(?i)"+skip, trans_desc): continue
@@ -149,7 +152,7 @@ class CsvImporter(importer.ImporterProtocol):
                 trans_desc_short = " ".join(trans_desc.split()).replace("\"","").replace(",",".")
 
                 # try to guess the account
-                extracted_account = self._guess_account_from_payee(trans_pay, (trans_desc_short, trans_amt, trans_cur))
+                extracted_account = self._guess_account_from_payee(trans_pay, (trans_desc_short, trans_amt, trans_cur, trans_date))
                 if extracted_account: 
                     trans_acc = extracted_account['account']
                     trans_pay = extracted_account['payee']
@@ -169,7 +172,7 @@ class CsvImporter(importer.ImporterProtocol):
 
                 if trans_acc not in accounts:
                     accounts.update({trans_acc:1})
-                    opn = data.Open(meta=meta,date=parse("01/01/2000").date(),account=trans_acc,currencies=[trans_cur],booking=None)
+                    # opn = data.Open(meta=meta,date=parse("01/01/2000").date(),account=trans_acc,currencies=[trans_cur],booking=None)
                     # entries.append(opn)
 
                 txn = data.Transaction(
@@ -207,7 +210,7 @@ class CsvImporter(importer.ImporterProtocol):
             with open(self.rules_path_new, 'a', newline='') as csvfile:
                 ruleswriter = csv.writer(csvfile, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 for payee,info in self.new_payees.items():
-                    trans_desc_short, trans_amt, trans_cur = info
+                    trans_desc_short, trans_amt, trans_cur, trans_date = info
                     if D(trans_amt) > 0:
                         trans_act="Income:XXXXXXXXX"
                     else:
