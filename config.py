@@ -15,6 +15,8 @@ from importers import csv_importer
 
 # csv_importer = PredictPostings(suggest_accounts=False)(CsvImporter)
 CONFIG = [
-    csv_importer.CsvImporter(bank='INGB',rules_path=os.environ["RULES"],chars_to_replace={"é":"à", "�":"é", "*":" ", "+":" "}, column_titles=['Date comptable', 'Montant', 'Devise', 'Libell�s', 'D�tails du mouvement'], skip=['Souscription.*'], date_format='%d/%m/%Y'),
-    csv_importer.CsvImporter(bank='KEYT',rules_path=os.environ["RULES"],chars_to_replace={"�":"", "*":" ", "+":" "}, column_titles=['Date', 'Montant', 'Devise', 'Description', 'Compte'], skip=['Souscription.*'], date_format='%d.%m.%Y'),
+    # TODO: deal with REVO's "Paid Out (EUR)"
+    csv_importer.CsvImporter(bank='REVO',rules_path=os.environ["RULES"],chars_to_replace={"�":""}, column_titles=['Completed Date', 'Paid Out|Paid In', '', 'Reference', 'Category', 'Category'], skip=['Souscription.*'], date_format='%Y %B %d', locale='fr_FR'),
+    csv_importer.CsvImporter(bank='KEYT',rules_path=os.environ["RULES"],chars_to_replace={"�":"", "*":" ", "+":" "}, column_titles=['Date', 'Montant', 'Devise', 'Description', 'Compte', 'Compte'], skip=['Souscription.*'], date_format='%d.%m.%Y', locale='fr_FR'),
+    csv_importer.CsvImporter(bank='INGB',rules_path=os.environ["RULES"],chars_to_replace={"�":"é", "*":" ", "+":" "}, column_titles=['Date comptable', 'Montant', 'Devise', 'Libellés', 'Détails du mouvement', 'Compte partie adverse'], skip=['Souscription.*'], date_format='%d/%m/%Y', locale='fr_FR'),
 ]
