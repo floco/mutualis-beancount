@@ -142,7 +142,7 @@ class CsvImporter(importer.ImporterProtocol):
 
                 # get the amount (skip if 0)
                 # TODO: make the amount conversion more generic
-                if re.match('.*|.*', self.column_titles[1]):
+                if re.match('.*\|.*', self.column_titles[1]):
                     trans_debit = row[self.column_titles[1].split("|")[0]].replace(".","").replace(",",".").replace(" ","")
                     trans_credit = row[self.column_titles[1].split("|")[1]].replace(".","").replace(",",".").replace(" ","")
                     #logging.info('debit: %s , credit %s', trans_debit, trans_credit)
@@ -165,8 +165,12 @@ class CsvImporter(importer.ImporterProtocol):
                 # get the description
                 trans_desc = row[self.column_titles[3]] + " " + row[self.column_titles[4]] + " " + row[self.column_titles[5]]
                 # ignore transactions to skip
+                shouldSkip = False
                 for skip in self.skip:
-                    if re.match("(?i)"+skip, trans_desc): continue
+                    if re.match("(?i)"+skip, trans_desc): 
+                        logging.info('Following transaction skipped: %s', trans_desc)
+                        shouldSkip = True
+                if shouldSkip: continue
                 # replace all characters required
                 for oldchar, newchar in self.chars_to_replace.items():
                     trans_desc = trans_desc.replace(oldchar, newchar)
